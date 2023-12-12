@@ -1,5 +1,5 @@
 source "../Config/bytcl_logger_setup.tcl"
-source "../Config/bytcl_csv_steup.tcl"
+source "../Config/bytcl_csv_setup.tcl"
 source "../Common/bytcl_chrTest_setup.tcl"
 source "../Common/bytcl_chrPairs_setup.tcl"
 source "../Config/bytcl_yaml_setup.tcl"
