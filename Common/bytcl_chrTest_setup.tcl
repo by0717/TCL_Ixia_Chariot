@@ -1,6 +1,6 @@
 source "../Config/bytcl_logger_setup.tcl"
 source "../Config/bytcl_yaml_setup.tcl"
-source "../Config/bytcl_"
+source "../Config/bytcl_chrErrorCode_setup.tcl"
 
 
 #***************************************************************
