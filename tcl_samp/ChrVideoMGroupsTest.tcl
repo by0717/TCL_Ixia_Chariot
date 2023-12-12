@@ -1,6 +1,6 @@
 #***************************************************************
 #
-#  IxChariot API SDK              File: ChrPairsTest.tcl
+#  IxChariot API SDK              File: ChrVideoMGroupsTest.tcl
 #
 #  This module contains code made available by Ixia on an AS IS
 #  basis.  Any one receiving the module is considered to be 
@@ -34,9 +34,9 @@
 #    e-mail: support@ixiacom.com
 #
 #
-#  EXAMPLE: Endpoint Pairs Test
-#  This script creates and runs a test with just endpoint pairs,
-#  then saves the test to a file.
+#  EXAMPLE: Video Multicast Groups Test
+#  This script creates and runs a test with video multicast
+#  groups, displays the DF and MLR and saves the test to a file.
 #
 #  All attributes of this test are defined by this script.
 #
@@ -46,18 +46,25 @@
 # Data for test:
 # Change these values for your network if desired.
 #***************************************************************
-set testFile "chrpairstest.tst"
-
-set pairCount 3
-set e1Addrs {"localhost" "127.0.0.1" "localhost"}
-set e2Addrs {"localhost" "127.0.0.1" "localhost"}
-set protocols {"TCP" "RTP" "UDP"}
-set scripts {"c:/Program Files/Ixia/IxChariot/Scripts/Response_Time.scr" \
-             "c:/Program Files/Ixia/IxChariot/Scripts/Streaming/Realaud.scr"   \
-             "c:/Program Files/Ixia/IxChariot/Scripts/Internet/SMTP.scr"}
+set testFile "chrvideomgroupstest.tst"
+set mgroupCount 1
+# For IPv6, change e1Addrs to IPv6 style addresses.
+set e1Addrs {"10.10.44.48"}
+# For IPv6, change mcAddrs to IPv6 multicast addresses.
+set mcAddrs {"230.1.1.10"}
+set mcPorts {5500}
+# For IPv6, protocols to UDP6 or RTP6.
+set protocols {"RTP"}
+set mpairCount 1
+# For IPv6, change e2Addrs to IPv6 style addresses.
+set e2Addrs {"10.10.44.48"}
+set codecs {"MPEG2"}
+set trDuration 1
+set bitrate 2.5
+set bitrateUM UNIT_Mb
 set timeout 5
-set maxWait 120
-set logFile "pairsTest.log"
+set maxWait 300
+set logFile "videomgroupsTest.log"
 
 #***************************************************************
 # Procedure to log errors if there is extended info
@@ -69,7 +76,6 @@ proc pLogError {handle code where} {
   # Define symbols for the errors we're interested in.
   set CHR_OPERATION_FAILED "CHRAPI 108"
   set CHR_OBJECT_INVALID   "CHRAPI 112"
-  set CHR_NO_SUCH_VALUE   "CHRAPI 116"
   set CHR_APP_GROUP_INVALID "CHRAPI 136"
 
   # Something failed: show what happened.
@@ -79,7 +85,6 @@ proc pLogError {handle code where} {
   # It's is only meaningful for certain errors.
   if {$code == $CHR_OPERATION_FAILED ||
       $code == $CHR_OBJECT_INVALID ||
-      $code == $CHR_NO_SUCH_VALUE ||
       $code == $CHR_APP_GROUP_INVALID} {
 
     # Try to get the extended error information
@@ -126,49 +131,68 @@ package require ChariotExt
 puts "Create the test..."
 set test [chrTest new]
 
-# Set the test filename for saving later.
-puts "Set test filename..."
+# Set the test filename.
 if {[catch {chrTest set $test FILENAME $testFile}]} {
   pLogError $test $errorCode "chrTest set FILENAME"
   return
 }
 
-# Define some pairs for the test.
-for {set index 0} {$index < $pairCount} {incr index} {
+# Define some video multicast groups for the test
+for {set mgrpIndex 0} {$mgrpIndex < $mgroupCount} {incr mgrpIndex} {
 
-  # Create a pair.
-  puts "Create a pair..."
-  set pair [chrPair new]
+  # Create a video mgroup
+  puts "Create a video mgroup..."
+  set videoMGroup [chrVideoMGroup new]
 
-  # Set pair attributes from our lists.
-  puts "Set pair atttributes..."
-  chrPair set $pair COMMENT "Pair [expr $index + 1]"
-  chrPair set $pair E1_ADDR [lindex $e1Addrs $index]
-  chrPair set $pair E2_ADDR [lindex $e2Addrs $index]
-  chrPair set $pair PROTOCOL [lindex $protocols $index]
+  # Set mgroup attributes from our lists
+  puts "Set mgroup attributes..."
+  chrMGroup set $videoMGroup NAME "MGroup [expr $mgrpIndex + 1]"
+  chrMGroup set $videoMGroup E1_ADDR [lindex $e1Addrs $mgrpIndex]
+  set mcAddr [lindex $mcAddrs $mgrpIndex]
+  chrMGroup set $videoMGroup MULTICAST_ADDR $mcAddr
+  set mcPort [lindex $mcPorts $mgrpIndex]
+  chrMGroup set $videoMGroup MULTICAST_PORT $mcPort
+  chrMGroup set $videoMGroup PROTOCOL [lindex $protocols $mgrpIndex]
 
-  # Define a script for use by this pair.
-  # We need to check for errors with extended info here.
-  set script [lindex $scripts $index]
-  if {[catch {chrPair useScript $pair $script}]} {
-    pLogError $pair $errorCode "chrPair useScript"
-    return
+  # Set video mgroup specific attributes
+  # Note: the codec must always be set
+  set codec [lindex $codecs $mgrpIndex]
+  chrVideoMGroup set $videoMGroup CODEC $codec
+  chrVideoMGroup set $videoMGroup TIMING_RECORD_DURATION $trDuration
+  chrVideoMGroup set $videoMGroup BITRATE $bitrate
+  chrVideoMGroup set $videoMGroup BITRATE_UNIT_OF_MEASUREMENT $bitrateUM
+
+  # Define mpairs for the group
+  for {set mprIndex 0} {$mprIndex < $mpairCount} {incr mprIndex} {
+
+    # Create an mpair
+    puts "Creating mpair..."
+    set mpair [chrMPair new]
+
+    # Prompt for the endpoint 2 address
+    puts "Set mpair attributes..."
+    set index [expr ($mgrpIndex * $mpairCount) + $mprIndex]
+    chrMPair set $mpair E2_ADDR [lindex $e2Addrs $index]
+
+    # Add the mpair to the group
+    puts "Add mpair to mgroup..."
+    if {[catch {chrMGroup addMPair $videoMGroup $mpair}]} {
+      pLogError $videoMGroup $errorCode "chrMGroup addMPair"
+      return;
+    }
   }
-  
-  # Add the pair to the test.
-  puts "Add the pair to the test..."
-  if {[catch {chrTest addPair $test $pair}]} {
-    pLogError $test $errorCode "chrTest addPair"
-    return
+
+  # Add the group to the test
+  puts "Add mgroup to the test..."
+  if {[catch {chrTest addMGroup $test $videoMGroup}]} {
+      pLogError $test $errorCode "chrTest addMGroup"
+      return
   }
 }
 
-# The test is complete, so now we can run it.
+# The test is complete, so now we can run it
 puts "Run the test..."
-if {[catch {chrTest start $test}]} {
-  pLogError $test $errorCode "chrTest start"
-  return
-}
+chrTest start $test
 
 # Wait for the test to stop.
 # We'll check in a loop here every 5 seconds
@@ -192,6 +216,29 @@ if {!$isStopped} {
   return
 }
 
+# Print the average, min and max values of DF and MLR
+if {[catch {set df [chrPairResults get $mpair DELAY_FACTOR]}]} {
+  pLogError $test $errorCode "chrPairResults get DELAY_FACTOR"
+  return
+} else {
+    set avg [string trimleft [format "%5.0f" [lindex $df 0]]]
+    set min [string trimleft [format "%5.0f" [lindex $df 1]]]
+    set max [string trimleft [format "%5.0f" [lindex $df 2]]]
+    puts "Delay Factor:"
+    puts "Average: $avg ms    Minimum: $min ms    Maximum: $max ms"
+}
+
+if {[catch {set mlr [chrPairResults get $mpair MEDIA_LOSS_RATE]}]} {
+  pLogError $test $errorCode "chrPairResults get MEDIA_LOSS_RATE"
+  return
+} else {
+    set avg [format "%.3f" [lindex $mlr 0]]
+    set min [format "%.3f" [lindex $mlr 1]]
+    set max [format "%.3f" [lindex $mlr 2]]
+    puts "Media Loss Rate:"
+    puts "Average: $avg media packets/s    Minimum: $min media packets/s    Maximum: $max media packets/s"
+}
+
 # Save the test so we can show results later.
 puts "Save the test..."
 if {[catch {chrTest save $test}]} {
@@ -200,3 +247,4 @@ if {[catch {chrTest save $test}]} {
 
 # We're finished!
 return
+

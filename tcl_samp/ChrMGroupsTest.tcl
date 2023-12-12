@@ -1,6 +1,6 @@
 #***************************************************************
 #
-#  IxChariot API SDK              File: ChrPairsTest.tcl
+#  IxChariot API SDK              File: ChrMGroupsTest.tcl
 #
 #  This module contains code made available by Ixia on an AS IS
 #  basis.  Any one receiving the module is considered to be 
@@ -34,9 +34,9 @@
 #    e-mail: support@ixiacom.com
 #
 #
-#  EXAMPLE: Endpoint Pairs Test
-#  This script creates and runs a test with just endpoint pairs,
-#  then saves the test to a file.
+#  EXAMPLE: Multicast Groups Test
+#  This script creates and runs a test with just multicast
+#  groups, then saves the test to a file.
 #
 #  All attributes of this test are defined by this script.
 #
@@ -46,18 +46,34 @@
 # Data for test:
 # Change these values for your network if desired.
 #***************************************************************
-set testFile "chrpairstest.tst"
+set testFile "chrmgroupstest.tst"
 
-set pairCount 3
-set e1Addrs {"localhost" "127.0.0.1" "localhost"}
-set e2Addrs {"localhost" "127.0.0.1" "localhost"}
-set protocols {"TCP" "RTP" "UDP"}
-set scripts {"c:/Program Files/Ixia/IxChariot/Scripts/Response_Time.scr" \
-             "c:/Program Files/Ixia/IxChariot/Scripts/Streaming/Realaud.scr"   \
-             "c:/Program Files/Ixia/IxChariot/Scripts/Internet/SMTP.scr"}
+set mgroupCount 2
+
+# For IPv6 multicast test change e1Addrs to IPv6 style addresses.
+set e1Addrs {"10.10.44.48" "10.10.44.48"}
+
+# For IPv6 multicast test change mcAddrs to IPv6 style addresses. 
+set mcAddrs {"230.1.1.10" "230.1.1.20"}
+set mcPorts {5500 5600}
+
+# For IPv6 multicast test change protocols to UDP6 or RTP6.
+set protocols {"RTP" "UDP"}
+set scripts {"c:/Program Files/Ixia/IxChariot/Scripts/Streaming/Realaud.scr" \
+             "c:/Program Files/Ixia/IxChariot/Scripts/Streaming/Realaud.scr"}
+
+set scriptVars {"number_of_timing_records"\
+                "number_of_timing_records"}
+set scriptVarValues {10 10}
+
+set mpairCount 3
+# For IPv6 multicast test change e2Addrs to IPv6 style addresses.
+set e2Addrs {"10.10.44.48" "10.10.44.78" "10.10.44.165"\
+             "10.10.44.48" "10.10.44.78" "10.10.44.165"}
+
 set timeout 5
 set maxWait 120
-set logFile "pairsTest.log"
+set logFile "mgroupsTest.log"
 
 #***************************************************************
 # Procedure to log errors if there is extended info
@@ -69,7 +85,6 @@ proc pLogError {handle code where} {
   # Define symbols for the errors we're interested in.
   set CHR_OPERATION_FAILED "CHRAPI 108"
   set CHR_OBJECT_INVALID   "CHRAPI 112"
-  set CHR_NO_SUCH_VALUE   "CHRAPI 116"
   set CHR_APP_GROUP_INVALID "CHRAPI 136"
 
   # Something failed: show what happened.
@@ -79,7 +94,6 @@ proc pLogError {handle code where} {
   # It's is only meaningful for certain errors.
   if {$code == $CHR_OPERATION_FAILED ||
       $code == $CHR_OBJECT_INVALID ||
-      $code == $CHR_NO_SUCH_VALUE ||
       $code == $CHR_APP_GROUP_INVALID} {
 
     # Try to get the extended error information
@@ -126,49 +140,80 @@ package require ChariotExt
 puts "Create the test..."
 set test [chrTest new]
 
-# Set the test filename for saving later.
-puts "Set test filename..."
+# Set the test filename.
 if {[catch {chrTest set $test FILENAME $testFile}]} {
   pLogError $test $errorCode "chrTest set FILENAME"
   return
 }
 
-# Define some pairs for the test.
-for {set index 0} {$index < $pairCount} {incr index} {
+# We'll set the run options to not stop
+# on initialization failures
+set runOpts [chrTest getRunOpts $test]
+chrRunOpts set $runOpts STOP_ON_INIT_ERR 0
 
-  # Create a pair.
-  puts "Create a pair..."
-  set pair [chrPair new]
+# Define some multicast groups for the test
+for {set mgrpIndex 0} {$mgrpIndex < $mgroupCount} {incr mgrpIndex} {
 
-  # Set pair attributes from our lists.
-  puts "Set pair atttributes..."
-  chrPair set $pair COMMENT "Pair [expr $index + 1]"
-  chrPair set $pair E1_ADDR [lindex $e1Addrs $index]
-  chrPair set $pair E2_ADDR [lindex $e2Addrs $index]
-  chrPair set $pair PROTOCOL [lindex $protocols $index]
+  # Create an mgroup
+  puts "Create a mgroup..."
+  set mgroup [chrMGroup new]
 
-  # Define a script for use by this pair.
+  # Set mgroup attributes from our lists
+  puts "Set mgroup attributes..."
+  chrMGroup set $mgroup NAME "MGroup [expr $mgrpIndex + 1]"
+  chrMGroup set $mgroup E1_ADDR [lindex $e1Addrs $mgrpIndex]
+  set mcAddr [lindex $mcAddrs $mgrpIndex]
+  chrMGroup set $mgroup MULTICAST_ADDR $mcAddr
+  set mcPort [lindex $mcPorts $mgrpIndex]
+  chrMGroup set $mgroup MULTICAST_PORT $mcPort
+  chrMGroup set $mgroup PROTOCOL [lindex $protocols $mgrpIndex]
+
+  # Define a script for use by this mulicast group.
   # We need to check for errors with extended info here.
-  set script [lindex $scripts $index]
-  if {[catch {chrPair useScript $pair $script}]} {
-    pLogError $pair $errorCode "chrPair useScript"
+  set script [lindex $scripts $mgrpIndex]
+  if {[catch {chrMGroup useScript $mgroup $script}]} {
+    pLogError $mgroup $errorCode "chrMGroup useScript"
     return
   }
-  
-  # Add the pair to the test.
-  puts "Add the pair to the test..."
-  if {[catch {chrTest addPair $test $pair}]} {
-    pLogError $test $errorCode "chrTest addPair"
-    return
+
+  # Set a script variable too
+  # Since we know what we're setting and the value we want
+  # for it, any failures are real errors here.
+  set varName [lindex $scriptVars $mgrpIndex]
+  set varValue [lindex $scriptVarValues $mgrpIndex]
+  chrMGroup setScriptVar $mgroup $varName $varValue
+
+  # Define mpairs for the group
+  for {set mprIndex 0} {$mprIndex < $mpairCount} {incr mprIndex} {
+
+    # Create an mpair
+    puts "Creating mpair..."
+    set mpair [chrMPair new]
+
+    # Prompt for the endpoint 2 address
+    puts "Set mpair attributes..."
+    set index [expr ($mgrpIndex * $mpairCount) + $mprIndex]
+    chrMPair set $mpair E2_ADDR [lindex $e2Addrs $index]
+
+    # Add the mpair to the group
+    puts "Add mpair to mgroup..."
+    if {[catch {chrMGroup addMPair $mgroup $mpair}]} {
+      pLogError $mgroup $errorCode "chrMGroup addMPair"
+      return;
+    }
+  }
+
+  # Add the group to the test
+  puts "Add mgroup to the test..."
+  if {[catch {chrTest addMGroup $test $mgroup}]} {
+      pLogError $test $errorCode "chrTest addMGroup"
+      return
   }
 }
 
-# The test is complete, so now we can run it.
+# The test is complete, so now we can run it
 puts "Run the test..."
-if {[catch {chrTest start $test}]} {
-  pLogError $test $errorCode "chrTest start"
-  return
-}
+chrTest start $test
 
 # Wait for the test to stop.
 # We'll check in a loop here every 5 seconds
@@ -200,3 +245,4 @@ if {[catch {chrTest save $test}]} {
 
 # We're finished!
 return
+

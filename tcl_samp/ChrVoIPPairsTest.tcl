@@ -1,6 +1,6 @@
 #***************************************************************
 #
-#  IxChariot API SDK              File: ChrPairsTest.tcl
+#  IxChariot API SDK              File: ChrVoIPPairsTest.tcl
 #
 #  This module contains code made available by Ixia on an AS IS
 #  basis.  Any one receiving the module is considered to be 
@@ -34,9 +34,9 @@
 #    e-mail: support@ixiacom.com
 #
 #
-#  EXAMPLE: Endpoint Pairs Test
-#  This script creates and runs a test with just endpoint pairs,
-#  then saves the test to a file.
+#  EXAMPLE: Endpoint VoIP Pairs Test
+#  This script creates and runs a test with just voice over ip
+#  endpoint pairs, then saves the test to a file.
 #
 #  All attributes of this test are defined by this script.
 #
@@ -46,18 +46,15 @@
 # Data for test:
 # Change these values for your network if desired.
 #***************************************************************
-set testFile "chrpairstest.tst"
+set testFile "chrvoippairstest.tst"
 
 set pairCount 3
 set e1Addrs {"localhost" "127.0.0.1" "localhost"}
 set e2Addrs {"localhost" "127.0.0.1" "localhost"}
-set protocols {"TCP" "RTP" "UDP"}
-set scripts {"c:/Program Files/Ixia/IxChariot/Scripts/Response_Time.scr" \
-             "c:/Program Files/Ixia/IxChariot/Scripts/Streaming/Realaud.scr"   \
-             "c:/Program Files/Ixia/IxChariot/Scripts/Internet/SMTP.scr"}
-set timeout 5
-set maxWait 120
-set logFile "pairsTest.log"
+set codecs  {"G711u" "G723.1A" "G729"}
+set timeout 15
+set maxWait 180
+set logFile "voipPairsTest.log"
 
 #***************************************************************
 # Procedure to log errors if there is extended info
@@ -69,7 +66,6 @@ proc pLogError {handle code where} {
   # Define symbols for the errors we're interested in.
   set CHR_OPERATION_FAILED "CHRAPI 108"
   set CHR_OBJECT_INVALID   "CHRAPI 112"
-  set CHR_NO_SUCH_VALUE   "CHRAPI 116"
   set CHR_APP_GROUP_INVALID "CHRAPI 136"
 
   # Something failed: show what happened.
@@ -79,7 +75,6 @@ proc pLogError {handle code where} {
   # It's is only meaningful for certain errors.
   if {$code == $CHR_OPERATION_FAILED ||
       $code == $CHR_OBJECT_INVALID ||
-      $code == $CHR_NO_SUCH_VALUE ||
       $code == $CHR_APP_GROUP_INVALID} {
 
     # Try to get the extended error information
@@ -136,28 +131,20 @@ if {[catch {chrTest set $test FILENAME $testFile}]} {
 # Define some pairs for the test.
 for {set index 0} {$index < $pairCount} {incr index} {
 
-  # Create a pair.
-  puts "Create a pair..."
-  set pair [chrPair new]
+  # Create a voip pair.
+  puts "Create a voip pair..."
+  set voipPair [chrVoIPPair new]
 
   # Set pair attributes from our lists.
   puts "Set pair atttributes..."
-  chrPair set $pair COMMENT "Pair [expr $index + 1]"
-  chrPair set $pair E1_ADDR [lindex $e1Addrs $index]
-  chrPair set $pair E2_ADDR [lindex $e2Addrs $index]
-  chrPair set $pair PROTOCOL [lindex $protocols $index]
+  chrPair set $voipPair COMMENT "Pair [expr $index + 1]"
+  chrPair set $voipPair E1_ADDR [lindex $e1Addrs $index]
+  chrPair set $voipPair E2_ADDR [lindex $e2Addrs $index]
+  chrVoIPPair set $voipPair CODEC [lindex $codecs $index]
 
-  # Define a script for use by this pair.
-  # We need to check for errors with extended info here.
-  set script [lindex $scripts $index]
-  if {[catch {chrPair useScript $pair $script}]} {
-    pLogError $pair $errorCode "chrPair useScript"
-    return
-  }
-  
   # Add the pair to the test.
   puts "Add the pair to the test..."
-  if {[catch {chrTest addPair $test $pair}]} {
+  if {[catch {chrTest addPair $test $voipPair}]} {
     pLogError $test $errorCode "chrTest addPair"
     return
   }
@@ -171,8 +158,8 @@ if {[catch {chrTest start $test}]} {
 }
 
 # Wait for the test to stop.
-# We'll check in a loop here every 5 seconds
-# then call it an error after two minutes if
+# We'll check in a loop here every 15 seconds
+# then call it an error after 3 minutes if
 # the test is still not stopped.
 set timer 0
 set isStopped 0

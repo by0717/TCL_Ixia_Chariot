@@ -1,6 +1,6 @@
 #***************************************************************
 #
-#  IxChariot API SDK              File: ChrPairsTest.tcl
+#  IxChariot API SDK              File: ChrVideoPairsTest.tcl
 #
 #  This module contains code made available by Ixia on an AS IS
 #  basis.  Any one receiving the module is considered to be 
@@ -34,9 +34,9 @@
 #    e-mail: support@ixiacom.com
 #
 #
-#  EXAMPLE: Endpoint Pairs Test
-#  This script creates and runs a test with just endpoint pairs,
-#  then saves the test to a file.
+#  EXAMPLE: Endpoint Video Pairs Test
+#  This script creates and runs a test with video endpoint pairs,
+#  displays the DF and MLR and then saves the test to a file.
 #
 #  All attributes of this test are defined by this script.
 #
@@ -46,18 +46,22 @@
 # Data for test:
 # Change these values for your network if desired.
 #***************************************************************
-set testFile "chrpairstest.tst"
+set testFile "chrvideopairstest.tst"
 
-set pairCount 3
-set e1Addrs {"localhost" "127.0.0.1" "localhost"}
-set e2Addrs {"localhost" "127.0.0.1" "localhost"}
-set protocols {"TCP" "RTP" "UDP"}
-set scripts {"c:/Program Files/Ixia/IxChariot/Scripts/Response_Time.scr" \
-             "c:/Program Files/Ixia/IxChariot/Scripts/Streaming/Realaud.scr"   \
-             "c:/Program Files/Ixia/IxChariot/Scripts/Internet/SMTP.scr"}
-set timeout 5
-set maxWait 120
-set logFile "pairsTest.log"
+set pairCount   1
+# For IPv6, change e1Addrs to IPv6 style addresses.
+set e1Addrs     {"localhost"}
+# For IPv6, change e2Addrs to IPv6 style addresses.
+set e2Addrs     {"localhost"}
+set codecs      {"MPEG2"}
+# For IPv6, change protocols to UDP6 or RTP6.
+set protocols   {"UDP"}
+set trDuration  1
+set bitrate     2.5
+set bitrateUM   UNIT_Mb
+set timeout     15
+set maxWait     300
+set logFile     "videoPairsTest.log"
 
 #***************************************************************
 # Procedure to log errors if there is extended info
@@ -69,7 +73,6 @@ proc pLogError {handle code where} {
   # Define symbols for the errors we're interested in.
   set CHR_OPERATION_FAILED "CHRAPI 108"
   set CHR_OBJECT_INVALID   "CHRAPI 112"
-  set CHR_NO_SUCH_VALUE   "CHRAPI 116"
   set CHR_APP_GROUP_INVALID "CHRAPI 136"
 
   # Something failed: show what happened.
@@ -79,7 +82,6 @@ proc pLogError {handle code where} {
   # It's is only meaningful for certain errors.
   if {$code == $CHR_OPERATION_FAILED ||
       $code == $CHR_OBJECT_INVALID ||
-      $code == $CHR_NO_SUCH_VALUE ||
       $code == $CHR_APP_GROUP_INVALID} {
 
     # Try to get the extended error information
@@ -136,28 +138,27 @@ if {[catch {chrTest set $test FILENAME $testFile}]} {
 # Define some pairs for the test.
 for {set index 0} {$index < $pairCount} {incr index} {
 
-  # Create a pair.
-  puts "Create a pair..."
-  set pair [chrPair new]
+  # Create a video pair.
+  puts "Create a video pair..."
+  set videoPair [chrVideoPair new]
 
   # Set pair attributes from our lists.
-  puts "Set pair atttributes..."
-  chrPair set $pair COMMENT "Pair [expr $index + 1]"
-  chrPair set $pair E1_ADDR [lindex $e1Addrs $index]
-  chrPair set $pair E2_ADDR [lindex $e2Addrs $index]
-  chrPair set $pair PROTOCOL [lindex $protocols $index]
+  puts "Set pair attributes..."
+  chrPair set $videoPair COMMENT "Pair [expr $index + 1]"
+  chrPair set $videoPair E1_ADDR [lindex $e1Addrs $index]
+  chrPair set $videoPair E2_ADDR [lindex $e2Addrs $index]
+  chrPair set $videoPair PROTOCOL [lindex $protocols $index]
 
-  # Define a script for use by this pair.
-  # We need to check for errors with extended info here.
-  set script [lindex $scripts $index]
-  if {[catch {chrPair useScript $pair $script}]} {
-    pLogError $pair $errorCode "chrPair useScript"
-    return
-  }
-  
+  # Set video pair specific attributes
+  # Note: the codec must always be set
+  chrVideoPair set $videoPair CODEC [lindex $codecs $index]
+  chrVideoPair set $videoPair TIMING_RECORD_DURATION $trDuration
+  chrVideoPair set $videoPair BITRATE $bitrate
+  chrVideoPair set $videoPair BITRATE_UNIT_OF_MEASUREMENT $bitrateUM
+
   # Add the pair to the test.
   puts "Add the pair to the test..."
-  if {[catch {chrTest addPair $test $pair}]} {
+  if {[catch {chrTest addPair $test $videoPair}]} {
     pLogError $test $errorCode "chrTest addPair"
     return
   }
@@ -171,8 +172,8 @@ if {[catch {chrTest start $test}]} {
 }
 
 # Wait for the test to stop.
-# We'll check in a loop here every 5 seconds
-# then call it an error after two minutes if
+# We'll check in a loop here every 15 seconds
+# then call it an error after 3 minutes if
 # the test is still not stopped.
 set timer 0
 set isStopped 0
@@ -190,6 +191,29 @@ if {!$isStopped} {
   set rc "CHRAPI 118"
   pLogError $test $rc "chrTest isStopped"
   return
+}
+
+# Print the average, min and max values of DF and MLR
+if {[catch {set df [chrPairResults get $videoPair DELAY_FACTOR]}]} {
+  pLogError $test $errorCode "chrPairResults get DELAY_FACTOR"
+  return
+} else {
+    set avg [string trimleft [format "%5.0f" [lindex $df 0]]]
+    set min [string trimleft [format "%5.0f" [lindex $df 1]]]
+    set max [string trimleft [format "%5.0f" [lindex $df 2]]]
+    puts "Delay Factor:"
+    puts "Average: $avg ms    Minimum: $min ms    Maximum: $max ms"
+}
+
+if {[catch {set mlr [chrPairResults get $videoPair MEDIA_LOSS_RATE]}]} {
+  pLogError $test $errorCode "chrPairResults get MEDIA_LOSS_RATE"
+  return
+} else {
+    set avg [format "%.3f" [lindex $mlr 0]]
+    set min [format "%.3f" [lindex $mlr 1]]
+    set max [format "%.3f" [lindex $mlr 2]]
+    puts "Media Loss Rate:"
+    puts "Average: $avg media packets/s    Minimum: $min media packets/s    Maximum: $max media packets/s"
 }
 
 # Save the test so we can show results later.

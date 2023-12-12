@@ -1,0 +1,16 @@
+Initialize=Initialize.tcl proc=ixChariot::Reset
+Setup=Configure.tcl proc=ixChariot::DeleteAllStreams proc=ixChariot::ConfigHWStreams
+WriteConfig=Configure.tcl proc=ixChariot::WriteConfig
+CheckLinkState=Configure.tcl proc=ixChariot::CheckLinkState
+Start=Transmit.tcl proc=ixChariot::StartTransmit
+Stop=Transmit.tcl proc=ixChariot::StopTransmit
+Connect=Connect.tcl proc=ixChariot::Connect
+Reset=Configure.tcl proc=ixChariot::Reset
+GetStatsTcpPort=Connect.tcl proc=ixChariot::OpenSocket
+StartStats=Statistics.tcl proc=ixChariot::StartMetricsPoll
+StopStats=Statistics.tcl proc=ixChariot::StopMetricsPoll
+Login=Initialize.tcl proc=ixChariot::Login
+Logout=Initialize.tcl proc=ixChariot::Logout
+VerifyPort=Configure.tcl proc=ixChariot::VerifyPort
+TakeOwnership=Configure.tcl proc=ixChariot::TakeOwnership
+
